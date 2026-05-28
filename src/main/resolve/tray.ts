@@ -9,6 +9,10 @@ import {
 import icoIcon from '../../../resources/icon.ico?asset'
 import pngIcon from '../../../resources/icon.png?asset'
 import templateIcon from '../../../resources/iconTemplate.png?asset'
+import icoIconSys from '../../../resources/icon-sys.ico?asset'
+import icoIconTun from '../../../resources/icon-tun.ico?asset'
+import pngIconSys from '../../../resources/icon-sys.png?asset'
+import pngIconTun from '../../../resources/icon-tun.png?asset'
 import {
   mihomoChangeProxy,
   mihomoCloseConnections,
@@ -44,6 +48,7 @@ let trayIconUpdateListenerRegistered = false
 let updateTrayMenuListenerRegistered = false
 let lastTrafficTrayIcon: string | null = null
 type TrayImage = Electron.NativeImage | string
+type IconKind = 'Common' | 'SysProxy' | 'Tun'
 const customTrayIconSize = 16
 const customTrayIconScaleFactors = [1, 1.25, 1.5, 2, 2.5, 3]
 
@@ -54,6 +59,26 @@ function formatDelayText(delay: number): string {
     return `${delay} ms`
   }
   return ''
+}
+
+function getIconKind(sysProxyEnabled: boolean, tunEnabled: boolean): IconKind {
+  if (tunEnabled) return 'Tun'
+  if (sysProxyEnabled) return 'SysProxy'
+  return 'Common'
+}
+
+function getIconPath(kind: IconKind): string {
+  const isWin32 = process.platform === 'win32'
+
+  switch (kind) {
+    case 'Tun':
+      return isWin32 ? icoIconTun : pngIconTun
+    case 'SysProxy':
+      return isWin32 ? icoIconSys : pngIconSys
+    case 'Common':
+    default:
+      return isWin32 ? icoIcon : pngIcon
+  }
 }
 
 function createDarwinTrayIcon(): Electron.NativeImage {
@@ -334,6 +359,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
         } catch (e) {
           // ignore
         } finally {
+          await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
         }
       }
@@ -357,6 +383,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
         } catch {
           // ignore
         } finally {
+          await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
         }
       }
@@ -591,7 +618,7 @@ export async function createTray(): Promise<void> {
 export async function updateTrayIcon(): Promise<void> {
   if (!tray) return
 
-  const { customTrayIcon = '' } = await getAppConfig()
+  const { customTrayIcon = '', sysProxy } = await getAppConfig()
   const customIcon = createCustomTrayImage(customTrayIcon)
   if (customIcon) {
     tray.setImage(customIcon)
@@ -603,11 +630,16 @@ export async function updateTrayIcon(): Promise<void> {
     tray.setImage(trafficIcon || createDarwinTrayIcon())
     return
   }
-  if (process.platform === 'win32') {
-    tray.setImage(icoIcon)
-    return
-  }
-  tray.setImage(pngIcon)
+
+  // 获取系统代理和 TUN 状态
+  const { tun } = await getControledMihomoConfig()
+  const sysProxyEnabled = sysProxy.enable
+  const tunEnabled = tun?.enable ?? false
+
+  // 根据状态选择图标
+  const kind = getIconKind(sysProxyEnabled, tunEnabled)
+  const iconPath = getIconPath(kind)
+  tray.setImage(iconPath)
 }
 
 async function updateTrayMenu(): Promise<void> {
