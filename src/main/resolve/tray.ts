@@ -606,12 +606,12 @@ export async function createTray(): Promise<void> {
     tray?.addListener('click', async () => {
       await triggerMainWindow()
     })
-    if (!updateTrayMenuListenerRegistered) {
-      ipcMain.on('updateTrayMenu', async () => {
-        await updateTrayMenu()
-      })
-      updateTrayMenuListenerRegistered = true
-    }
+  }
+  if (!updateTrayMenuListenerRegistered) {
+    ipcMain.on('updateTrayMenu', async () => {
+      await rebuildTrayMenu()
+    })
+    updateTrayMenuListenerRegistered = true
   }
 }
 
@@ -640,6 +640,14 @@ export async function updateTrayIcon(): Promise<void> {
   const kind = getIconKind(sysProxyEnabled, tunEnabled)
   const iconPath = getIconPath(kind)
   tray.setImage(iconPath)
+}
+
+async function rebuildTrayMenu(): Promise<void> {
+  const menu = await buildContextMenu()
+  trayMenu = menu
+  if (process.platform === 'linux') {
+    tray?.setContextMenu(menu)
+  }
 }
 
 async function updateTrayMenu(): Promise<void> {

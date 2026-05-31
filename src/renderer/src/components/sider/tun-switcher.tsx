@@ -42,6 +42,7 @@ const TunSwitcher: React.FC<Props> = (props) => {
     }
     await restartCore()
     window.electron.ipcRenderer.send('updateFloatingWindow')
+    window.electron.ipcRenderer.invoke('updateTrayIcon')
     window.electron.ipcRenderer.send('updateTrayMenu')
   }
 

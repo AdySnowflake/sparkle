@@ -11,6 +11,7 @@ import { patchMihomoConfig } from '../core/mihomoApi'
 import { quitWithoutCore, restartCore } from '../core/manager'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 import { showNotification } from '../utils/notification'
+import { updateTrayIcon } from './tray'
 
 export async function registerShortcut(
   oldShortcut: string,
@@ -51,6 +52,7 @@ export async function registerShortcut(
         } catch {
           // ignore
         } finally {
+          await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
         }
       })
@@ -74,6 +76,7 @@ export async function registerShortcut(
         } catch {
           // ignore
         } finally {
+          await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
         }
       })
