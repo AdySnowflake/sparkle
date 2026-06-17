@@ -53,6 +53,9 @@ interface AppConfig {
   proxyCols: 'auto' | '1' | '2' | '3' | '4'
   connectionDirection: 'asc' | 'desc'
   connectionOrderBy: 'time' | 'upload' | 'download' | 'uploadSpeed' | 'downloadSpeed' | 'process'
+  connectionGroupByProcess?: boolean
+  connectionGroupSort?: 'name' | 'count' | 'upload' | 'download' | 'uploadSpeed' | 'downloadSpeed'
+  connectionGroupDirection?: 'asc' | 'desc'
   connectionInterval?: number
   spinFloatingIcon?: boolean
   disableTray?: boolean
@@ -73,6 +76,9 @@ interface AppConfig {
   tunCardStatus?: CardStatus
   githubToken?: string
   gistSyncEnabled?: boolean
+  gistEncrypted?: boolean
+  gistAgeRecipient?: string
+  gistAgeIdentity?: string
   useSubStore: boolean
   subStoreHost?: string
   subStoreBackendSyncCron?: string
@@ -163,6 +169,8 @@ interface ProfileItem {
   updated?: number
   override?: string[]
   useProxy?: boolean
+  ageRecipient?: string
+  ageIdentity?: string
   extra?: SubscriptionUserInfo
   substore?: boolean
   locked?: boolean

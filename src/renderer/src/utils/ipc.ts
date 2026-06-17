@@ -183,8 +183,8 @@ export async function getProfileStr(id: string): Promise<string> {
   return ipcErrorWrapper(await window.electron.ipcRenderer.invoke('getProfileStr', id))
 }
 
-export async function getFileStr(id: string): Promise<string> {
-  return ipcErrorWrapper(await window.electron.ipcRenderer.invoke('getFileStr', id))
+export async function getFileStr(id: string, ageSecretKey?: string): Promise<string> {
+  return ipcErrorWrapper(await window.electron.ipcRenderer.invoke('getFileStr', id, ageSecretKey))
 }
 
 export async function getFilePreviewStr(id: string, format?: string): Promise<string> {
@@ -551,6 +551,16 @@ export async function createHeapSnapshot(): Promise<string> {
 
 export async function getUserAgent(): Promise<string> {
   return ipcErrorWrapper(await window.electron.ipcRenderer.invoke('getUserAgent'))
+}
+
+export async function generateAgeKeyPair(): Promise<{ identity: string; recipient: string }> {
+  return ipcErrorWrapper(await window.electron.ipcRenderer.invoke('generateAgeKeyPair'))
+}
+
+export async function ageIdentityToRecipient(identity: string): Promise<string> {
+  return ipcErrorWrapper(
+    await window.electron.ipcRenderer.invoke('ageIdentityToRecipient', identity)
+  )
 }
 
 export async function getAppName(appPath: string): Promise<string> {
