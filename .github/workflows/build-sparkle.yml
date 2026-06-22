@@ -1,4 +1,4 @@
-name: Build Quick
+name: Build Sparkle
 
 on:
   push:
