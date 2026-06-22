@@ -627,19 +627,29 @@ export async function updateTrayIcon(): Promise<void> {
 
   if (process.platform === 'darwin') {
     const trafficIcon = lastTrafficTrayIcon ? createTrafficTrayImage(lastTrafficTrayIcon) : null
-    tray.setImage(trafficIcon || createDarwinTrayIcon())
+    if (trafficIcon) {
+      tray.setImage(trafficIcon)
+      return
+    }
+  }
+
+  const { tun } = await getControledMihomoConfig()
+  const kind = getIconKind(sysProxy.enable, tun?.enable ?? false)
+
+  if (process.platform === 'darwin') {
+    if (kind !== 'Common') {
+      const icon = nativeImage.createFromPath(getIconPath(kind)).resize({ height: customTrayIconSize })
+      if (!icon.isEmpty()) {
+        icon.setTemplateImage(true)
+        tray.setImage(icon)
+        return
+      }
+    }
+    tray.setImage(createDarwinTrayIcon())
     return
   }
 
-  // 获取系统代理和 TUN 状态
-  const { tun } = await getControledMihomoConfig()
-  const sysProxyEnabled = sysProxy.enable
-  const tunEnabled = tun?.enable ?? false
-
-  // 根据状态选择图标
-  const kind = getIconKind(sysProxyEnabled, tunEnabled)
-  const iconPath = getIconPath(kind)
-  tray.setImage(iconPath)
+  tray.setImage(getIconPath(kind))
 }
 
 async function rebuildTrayMenu(): Promise<void> {
