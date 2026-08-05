@@ -21,6 +21,16 @@ import { appendAppLog } from '../utils/log'
 
 let downloadCancelToken: CancelTokenSource | null = null
 const WINDOWS_INSTALLER_MIN_TEMP_SPACE_BYTES = 1024 * 1024 * 1024
+const UPDATE_MANIFEST_URLS: Record<AppUpdateChannel, string> = {
+  stable: 'https://github.com/xishang0128/sparkle/releases/latest/download/latest.yml',
+  rolling: 'https://github.com/xishang0128/sparkle/releases/download/rolling/latest.yml'
+}
+
+function resolveReleaseTag(version: string, tag?: string): string {
+  if (tag) return tag
+  if (version.includes('-rolling-')) return 'rolling'
+  return version
+}
 
 async function ensureFreeSpace(dir: string, requiredBytes: number, message: string): Promise<void> {
   const stats = await statfs(dir)
@@ -35,10 +45,7 @@ async function ensureFreeSpace(dir: string, requiredBytes: number, message: stri
 export async function checkUpdate(): Promise<AppVersion | undefined> {
   const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
   const { updateChannel = 'stable' } = await getAppConfig()
-  let url = 'https://github.com/xishang0128/sparkle/releases/latest/download/latest.yml'
-  if (updateChannel == 'beta') {
-    url = 'https://github.com/xishang0128/sparkle/releases/download/pre-release/latest.yml'
-  }
+  const url = UPDATE_MANIFEST_URLS[updateChannel]
   const res = await axios.get(url, {
     headers: { 'Content-Type': 'application/octet-stream' },
     ...(mixedPort != 0 && {
@@ -82,13 +89,25 @@ async function ensureWindowsInstallerTempSpace(): Promise<void> {
   await ensureFreeSpace(tempDir, WINDOWS_INSTALLER_MIN_TEMP_SPACE_BYTES, '临时目录空间不足')
 }
 
-export async function downloadAndInstallUpdate(version: string): Promise<void> {
+export async function downloadAndInstallUpdate(version: string, tag?: string): Promise<void> {
   let appUpdateInstalling = false
-  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
-  let releaseTag = version
-  if (version.includes('beta')) {
-    releaseTag = 'pre-release'
+  let sysProxyPaused = false
+  const pauseSysProxy = async (): Promise<void> => {
+    sysProxyPaused = true
+    await triggerSysProxy(false, false)
   }
+  const resumeSysProxy = async (): Promise<void> => {
+    if (!sysProxyPaused) return
+    sysProxyPaused = false
+    try {
+      const { sysProxy, onlyActiveDevice = false } = await getAppConfig()
+      if (sysProxy.enable) await triggerSysProxy(true, onlyActiveDevice)
+    } catch (error) {
+      await appendAppLog(`[Updater]: restore sysproxy failed, ${error}\n`).catch(() => {})
+    }
+  }
+  const { 'mixed-port': mixedPort = 7890 } = await getControledMihomoConfig()
+  const releaseTag = resolveReleaseTag(version, tag)
   const baseUrl = `https://github.com/xishang0128/sparkle/releases/download/${releaseTag}/`
   const fileMap: Record<string, string> = {
     'win32-x64': `sparkle-windows-${version}-x64-setup.exe`,
@@ -179,7 +198,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
 
     if (file.endsWith('.exe')) {
       await ensureWindowsInstallerTempSpace()
-      await triggerSysProxy(false, false)
+      await pauseSysProxy()
       await pauseServiceFallbackForAppUpdate()
       spawn(path.join(dataDir(), file), ['/S', '--updated', '--force-run'], {
         detached: true,
@@ -188,7 +207,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
       appUpdateInstalling = true
     }
     if (file.endsWith('.7z')) {
-      await triggerSysProxy(false, false)
+      await pauseSysProxy()
       await pauseServiceFallbackForAppUpdate()
       await stopServiceForPortableUpdate()
       await copyFile(path.join(resourcesFilesDir(), '7za.exe'), path.join(dataDir(), '7za.exe'))
@@ -209,7 +228,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
     }
     if (file.endsWith('.pkg')) {
       try {
-        await triggerSysProxy(false, false)
+        await pauseSysProxy()
         await pauseServiceFallbackForAppUpdate()
         const execPromise = promisify(exec)
         const shell = `installer -pkg ${path.join(dataDir(), file).replace(' ', '\\\\ ')} -target /`
@@ -221,12 +240,14 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
         app.quit()
       } catch {
         await clearAppUpdateServiceFallbackPause()
+        await resumeSysProxy()
         shell.openPath(path.join(dataDir(), file))
       }
     }
   } catch (e) {
     if (!appUpdateInstalling) {
       await clearAppUpdateServiceFallbackPause()
+      await resumeSysProxy()
     }
     await rm(path.join(dataDir(), file), { force: true })
     if (axios.isCancel(e)) {

@@ -10,10 +10,7 @@ let hiddenUpdateButtonVersion = ''
 
 interface Props {
   iconOnly?: boolean
-  latest?: {
-    version: string
-    changelog: string
-  }
+  latest?: AppVersion
   showButtonAfterNotification?: boolean
 }
 
@@ -39,10 +36,10 @@ const UpdaterButton: React.FC<Props> = (props) => {
       setUpdateStatus(status)
     }
 
-    window.electron.ipcRenderer.on('update-status', handleUpdateStatus)
+    const unsubscribe = window.electron.ipcRenderer.on('update-status', handleUpdateStatus)
 
     return (): void => {
-      window.electron.ipcRenderer.removeAllListeners('update-status')
+      unsubscribe()
     }
   }, [])
 
@@ -100,6 +97,7 @@ const UpdaterButton: React.FC<Props> = (props) => {
       {openDrawer && (
         <UpdaterDrawer
           version={latest.version}
+          tag={latest.tag}
           changelog={latest.changelog}
           updateStatus={updateStatus}
           reopenSignal={drawerReopenSignal}

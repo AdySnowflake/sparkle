@@ -10,7 +10,16 @@ import {
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
 import { FaLocationCrosshairs } from 'react-icons/fa6'
-import { memo, useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
 import ProxySettingDrawer from '@renderer/components/proxies/proxy-setting-drawer'
@@ -38,6 +47,10 @@ function compareProxyDelay(a: ProxyLike, b: ProxyLike): number {
   if (delayA === 0) return 1
   if (delayB === 0) return -1
   return delayA - delayB
+}
+
+function getProviderName(proxy: ProxyLike): string | undefined {
+  return 'provider-name' in proxy ? proxy['provider-name'] : undefined
 }
 
 interface GroupHeaderProps {
@@ -222,6 +235,7 @@ const Proxies: React.FC = () => {
   const scrollerElRef = useRef<HTMLElement | null>(null)
   const rememberProxyGroupOpenStateRef = useRef(rememberProxyGroupOpenState)
   rememberProxyGroupOpenStateRef.current = rememberProxyGroupOpenState
+  const previousGroupsRef = useRef(groups)
 
   const scrollerRef = useCallback((el: Window | HTMLElement | null) => {
     if (scrollerElRef.current) {
@@ -241,32 +255,40 @@ const Proxies: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => {
-    const openUpdater = (prev: boolean[]): boolean[] => {
-      if (prev.length === groups.length) return prev
-      if (
-        rememberProxyGroupOpenStateRef.current &&
-        Object.keys(proxyGroupPageCache.isOpen).length > 0
-      ) {
-        return groups.map((group) => proxyGroupPageCache.isOpen[group.name] ?? false)
-      }
-      return groups.map((_, index) => prev[index] ?? false)
+  useLayoutEffect(() => {
+    const previousGroups = previousGroupsRef.current
+    previousGroupsRef.current = groups
+    if (
+      previousGroups.length === groups.length &&
+      previousGroups.every((group, index) => group.name === groups[index].name)
+    ) {
+      return
     }
-    setIsOpen(openUpdater)
-    setIsOpenContent(openUpdater)
-    setSearchValue((prev) => {
-      if (prev.length === groups.length) return prev
-      if (
-        rememberProxyGroupOpenStateRef.current &&
-        Object.keys(proxyGroupPageCache.searchValue).length > 0
-      ) {
-        return groups.map((group) => proxyGroupPageCache.searchValue[group.name] ?? '')
-      }
-      return groups.map((_, index) => prev[index] ?? '')
-    })
-    setDelaying((prev) =>
-      prev.length === groups.length ? prev : groups.map((_, index) => prev[index] || false)
+
+    const remapByGroupName = <T,>(
+      prev: T[],
+      getFallback: (group: ControllerMixedGroup) => T
+    ): T[] => {
+      const previousValues = new Map(
+        previousGroups.map((group, index) => [group.name, prev[index]] as const)
+      )
+      return groups.map((group) => previousValues.get(group.name) ?? getFallback(group))
+    }
+
+    const getOpenFallback = (group: ControllerMixedGroup): boolean =>
+      rememberProxyGroupOpenStateRef.current
+        ? (proxyGroupPageCache.isOpen[group.name] ?? false)
+        : false
+    setIsOpen((prev) => remapByGroupName(prev, getOpenFallback))
+    setIsOpenContent((prev) => remapByGroupName(prev, getOpenFallback))
+    setSearchValue((prev) =>
+      remapByGroupName(prev, (group) =>
+        rememberProxyGroupOpenStateRef.current
+          ? (proxyGroupPageCache.searchValue[group.name] ?? '')
+          : ''
+      )
     )
+    setDelaying((prev) => remapByGroupName(prev, () => false))
   }, [groups])
 
   const { groupCounts, allProxies } = useMemo(() => {
@@ -320,8 +342,8 @@ const Proxies: React.FC = () => {
   )
 
   const onProxyDelay = useCallback(
-    async (proxy: string, group?: ControllerMixedGroup): Promise<ControllerProxiesDelay> => {
-      return await mihomoProxyDelay(proxy, getDelayTestUrl(group))
+    async (proxy: ProxyLike, group?: ControllerMixedGroup): Promise<ControllerProxiesDelay> => {
+      return await mihomoProxyDelay(proxy.name, getDelayTestUrl(group), getProviderName(proxy))
     },
     [getDelayTestUrl]
   )
@@ -372,7 +394,7 @@ const Proxies: React.FC = () => {
 
         await runDelayTestsWithConcurrency(proxies, delayTestConcurrency, async (proxy) => {
           try {
-            await mihomoProxyDelay(proxy.name, testUrl)
+            await mihomoProxyDelay(proxy.name, testUrl, getProviderName(proxy))
           } catch {
             // ignore
           }

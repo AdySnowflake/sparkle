@@ -61,13 +61,8 @@ import {
   subStoreFrontendPort,
   subStorePort
 } from '../resolve/server'
-import {
-  quitWithoutCore,
-  restartCore,
-  startNetworkDetection,
-  stopCore,
-  stopNetworkDetection
-} from '../core/manager'
+import { quitWithoutCore, restartCore, startNetworkDetection, stopCore } from '../core/manager'
+import { stopNetworkDetection } from '../core/network'
 import {
   checkCorePermission,
   manualGrantCorePermition,
@@ -188,7 +183,7 @@ async function patchAppConfigWithServiceSync(patch: Partial<AppConfig>): Promise
     save_logs: saveLogs,
     max_log_file_size_mb: maxLogFileSizeMB
   }).catch((error) => {
-    void appendAppLog(`[Service]: sync core log config failed, ${error}\n`)
+    appendAppLog(`[Service]: sync core log config failed, ${error}\n`).catch(() => {})
   })
 
   return nextConfig
@@ -241,8 +236,8 @@ export function registerIpcMainHandlers(): void {
   ipcMain.handle('mihomoUpgradeGeo', ipcErrorWrapper(mihomoUpgradeGeo))
   ipcMain.handle('mihomoUpgradeUI', ipcErrorWrapper(mihomoUpgradeUI))
   ipcMain.handle('mihomoUpgrade', (_e, channel) => ipcErrorWrapper(mihomoUpgrade)(channel))
-  ipcMain.handle('mihomoProxyDelay', (_e, proxy, url) =>
-    ipcErrorWrapper(mihomoProxyDelay)(proxy, url)
+  ipcMain.handle('mihomoProxyDelay', (_e, proxy, url, provider) =>
+    ipcErrorWrapper(mihomoProxyDelay)(proxy, url, provider)
   )
   ipcMain.handle('mihomoGroupDelay', (_e, group, url) =>
     ipcErrorWrapper(mihomoGroupDelay)(group, url)
@@ -328,8 +323,8 @@ export function registerIpcMainHandlers(): void {
   ipcMain.handle('getCurrentProfileStr', ipcErrorWrapper(getCurrentProfileStr))
   ipcMain.handle('getOverrideProfileStr', ipcErrorWrapper(getOverrideProfileStr))
   ipcMain.handle('getRuntimeConfig', ipcErrorWrapper(getRuntimeConfig))
-  ipcMain.handle('downloadAndInstallUpdate', (_e, version) =>
-    ipcErrorWrapper(downloadAndInstallUpdate)(version)
+  ipcMain.handle('downloadAndInstallUpdate', (_e, version, tag) =>
+    ipcErrorWrapper(downloadAndInstallUpdate)(version, tag)
   )
   ipcMain.handle('checkUpdate', ipcErrorWrapper(checkUpdate))
   ipcMain.handle('cancelUpdate', ipcErrorWrapper(cancelUpdate))
