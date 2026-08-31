@@ -139,11 +139,11 @@ function createCustomTrayImage(customTrayIcon: string): TrayImage | null {
   return createMultiScaleTrayImage(icon)
 }
 
-function createTrafficTrayImage(png: string, templateImage = true): Electron.NativeImage | null {
+function createTrafficTrayImage(png: string): Electron.NativeImage | null {
   const image = nativeImage.createFromDataURL(png).resize({ height: customTrayIconSize })
   if (image.isEmpty()) return null
 
-  image.setTemplateImage(templateImage)
+  image.setTemplateImage(false)
   return image
 }
 
@@ -569,7 +569,7 @@ export async function createTray(): Promise<void> {
         const { customTrayIcon = '' } = await getAppConfig()
         const customIcon = createCustomTrayImage(customTrayIcon)
         if (png) {
-          const image = createTrafficTrayImage(png, !customIcon)
+          const image = createTrafficTrayImage(png)
           if (image) {
             tray?.setImage(image)
             return
@@ -629,7 +629,9 @@ export async function updateTrayIcon(): Promise<void> {
         return
       }
     } else {
-      const icon = nativeImage.createFromPath(getIconPath(kind)).resize({ height: customTrayIconSize })
+      const icon = nativeImage
+        .createFromPath(getIconPath(kind))
+        .resize({ height: customTrayIconSize })
       if (!icon.isEmpty()) {
         tray.setImage(icon)
         return
