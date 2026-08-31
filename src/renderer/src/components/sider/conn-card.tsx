@@ -7,9 +7,12 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { IoLink } from 'react-icons/io5'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { readImageFileDataURL } from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import templateTrayIcon from '../../../../../resources/iconTemplate.png'
+import sysProxyTrayIcon from '../../../../../resources/icon-sys.png'
+import tunTrayIcon from '../../../../../resources/icon-tun.png'
 import TrafficChart from './traffic-chart'
 
 let currentUpload: number | undefined = undefined
@@ -34,6 +37,7 @@ interface Props {
 const ConnCard: React.FC<Props> = (props) => {
   const { iconOnly } = props
   const { appConfig } = useAppConfig()
+  const { controledMihomoConfig } = useControledMihomoConfig()
   const {
     showTraffic = false,
     customTrayIcon = '',
@@ -44,6 +48,13 @@ const ConnCard: React.FC<Props> = (props) => {
   showTrafficRef.current = showTraffic
   const customTrayIconRef = useRef(customTrayIcon)
   customTrayIconRef.current = customTrayIcon
+  const trayIconStateKey = controledMihomoConfig?.tun?.enable
+    ? 'tun'
+    : appConfig?.sysProxy?.enable
+      ? 'sysproxy'
+      : 'default'
+  const trayIconStateKeyRef = useRef(trayIconStateKey)
+  trayIconStateKeyRef.current = trayIconStateKey
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -93,7 +104,12 @@ const ConnCard: React.FC<Props> = (props) => {
         if (drawing) return
         drawing = true
         try {
-          await drawTrayTrafficIcon(info.up, info.down, customTrayIconRef.current)
+          await drawTrayTrafficIcon(
+            info.up,
+            info.down,
+            customTrayIconRef.current,
+            trayIconStateKeyRef.current
+          )
           hasShowTraffic = true
         } catch {
           // ignore
@@ -119,6 +135,29 @@ const ConnCard: React.FC<Props> = (props) => {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (
+      platform !== 'darwin' ||
+      !showTraffic ||
+      !hasShowTraffic ||
+      currentUpload === undefined ||
+      currentDownload === undefined ||
+      drawing
+    ) {
+      return
+    }
+
+    drawing = true
+    void drawTrayTrafficIcon(
+      currentUpload,
+      currentDownload,
+      customTrayIcon,
+      trayIconStateKey
+    ).finally(() => {
+      drawing = false
+    })
+  }, [customTrayIcon, showTraffic, trayIconStateKey])
 
   if (iconOnly) {
     return (
@@ -239,9 +278,10 @@ export default React.memo(ConnCard, (prevProps, nextProps) => {
 const drawTrayTrafficIcon = async (
   upload: number,
   download: number,
-  customTrayIcon: string
+  customTrayIcon: string,
+  trayIconStateKey: string
 ): Promise<void> => {
-  const trayIconKey = customTrayIcon || 'default'
+  const trayIconKey = customTrayIcon || trayIconStateKey
   if (upload === currentUpload && download === currentDownload && trayIconKey === currentTrayIcon) {
     return
   }
@@ -251,7 +291,12 @@ const drawTrayTrafficIcon = async (
   const trayIcon = await loadImage(
     customTrayIcon && !customTrayIcon.startsWith('data:image/')
       ? await readImageFileDataURL(customTrayIcon)
-      : customTrayIcon || templateTrayIcon
+      : customTrayIcon ||
+          (trayIconStateKey === 'tun'
+            ? tunTrayIcon
+            : trayIconStateKey === 'sysproxy'
+              ? sysProxyTrayIcon
+              : templateTrayIcon)
   )
 
   const canvas = document.createElement('canvas')
