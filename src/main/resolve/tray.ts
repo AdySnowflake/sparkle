@@ -617,13 +617,28 @@ export async function updateTrayIcon(): Promise<void> {
     return
   }
 
+  const { tun } = await getControledMihomoConfig()
+  const kind = getIconKind(sysProxy.enable, tun?.enable ?? false)
+
   if (process.platform === 'darwin') {
+    if (kind === 'Common') {
+      const icon = nativeImage.createFromPath(templateIcon).resize({ height: customTrayIconSize })
+      if (!icon.isEmpty()) {
+        icon.setTemplateImage(true)
+        tray.setImage(icon)
+        return
+      }
+    } else {
+      const icon = nativeImage.createFromPath(getIconPath(kind)).resize({ height: customTrayIconSize })
+      if (!icon.isEmpty()) {
+        tray.setImage(icon)
+        return
+      }
+    }
     tray.setImage(createDarwinTrayIcon())
     return
   }
 
-  const { tun } = await getControledMihomoConfig()
-  const kind = getIconKind(sysProxy.enable, tun?.enable ?? false)
   tray.setImage(getIconPath(kind))
 }
 
