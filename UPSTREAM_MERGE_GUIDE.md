@@ -1,12 +1,12 @@
-# 上游发布版本合并指南
+# 上游提交合并指南
 
-本文档用于把上游仓库的某个**已发布版本**合并到本仓库的 `dev` 分支。
+本文档用于把上游仓库中用户指定的某个 commit 合并到本仓库的 `dev` 分支。
 
 ## 核心原则
 
-- 只合并上游发布版本对应的固定数字 tag。
-- 不直接合并 `upstream/master`，否则可能带入尚未发布的提交。
-- 不使用 `rolling`，因为它可能随上游滚动更新。
+- 每次操作前必须先询问用户要合并的上游 commit SHA，不得自行选择最新 tag 或分支提交。
+- 只合并用户明确指定并验证过的 commit SHA。
+- 不直接合并 `upstream/master` 或其他上游分支名；如需合并其最新提交，必须先向用户确认，再记录并验证具体 SHA。
 - `git fetch` 只下载对象，不会修改 `dev`。
 - 普通 `git merge` 在没有冲突时会自动提交。使用 `--no-commit --no-ff` 可以先检查结果，再决定是否提交。
 
@@ -38,28 +38,35 @@ git remote set-url --push upstream DISABLED
 git config remote.pushDefault origin
 ```
 
-## 每次发布后的标准操作
+## 每次合并的标准操作
 
-先设置本次要合并的上游版本号，使用固定数字 tag，不要使用 `rolling`：
+先询问用户本次要合并的上游 commit SHA。只有用户明确指定后，才设置变量：
 
 ```bash
-VERSION="<上游版本号>"
+COMMIT="<用户指定的上游 commit SHA>"
 ```
 
-### 1. 确认上游发布 tag
+### 1. 确认上游 commit
 
-列出上游 tag：
+获取上游分支信息，仅用于确认用户指定的 commit 来源：
 
 ```bash
-git ls-remote --tags --refs upstream
+git ls-remote --heads upstream
 ```
 
-在上游发布页面确认要合并的固定数字 tag。不要选择 `rolling`，也不要仅凭 `master` 当前的位置判断发布版本。
-
-确认指定 tag 存在：
+确认用户指定的 commit SHA 属于上游仓库，并核对其提交信息：
 
 ```bash
-git ls-remote --exit-code --tags upstream "refs/tags/$VERSION"
+git fetch --no-tags upstream "$COMMIT"
+git show --no-patch --pretty=fuller "$COMMIT"
+```
+
+如果用户要求合并上游分支的最新提交，必须先查询该分支当前 SHA，向用户说明将要合并的具体 SHA，得到确认后再继续。不得仅使用分支名代替 commit SHA。
+
+确认指定 commit 对象存在且类型正确：
+
+```bash
+git cat-file -e "$COMMIT^{commit}"
 ```
 
 ### 2. 确保本地 `dev` 可安全操作
@@ -81,19 +88,10 @@ git status
 git pull --ff-only origin dev
 ```
 
-### 3. 只获取目标发布 tag
+### 3. 合并，但停在 commit 前
 
 ```bash
-git fetch --no-tags upstream tag "$VERSION"
-git show --no-patch --decorate "$VERSION"
-```
-
-这不会获取或合并 `upstream/master`，也不会修改当前工作区。
-
-### 4. 合并，但停在 commit 前
-
-```bash
-git merge --no-commit --no-ff "$VERSION"
+git merge --no-commit --no-ff "$COMMIT"
 ```
 
 如果没有冲突，Git 会显示类似：
@@ -176,7 +174,7 @@ git add .github/workflows/build-sparkle.yml
 检查无误后提交：
 
 ```bash
-git commit -m "merge: upstream release $VERSION"
+git commit -m "merge: upstream commit $COMMIT"
 ```
 
 确认生成的是 merge commit，并查看它的两个父提交：
@@ -212,10 +210,10 @@ git revert -m 1 <merge-commit-sha>
 ## 每次操作的简要清单
 
 ```text
-[ ] 在上游发布页面确认固定数字 tag
+[ ] 询问用户要合并的上游 commit SHA
 [ ] 确认处于 dev 且工作区干净
-[ ] git fetch --no-tags upstream tag <版本>
-[ ] git merge --no-commit --no-ff <版本>
+[ ] 获取并验证用户指定的 commit SHA
+[ ] git merge --no-commit --no-ff <commit-sha>
 [ ] 解决冲突，或 git merge --abort
 [ ] 检查源码和 .github/workflows 的 staged diff
 [ ] 如 workflow 有变化，通知用户并说明影响
