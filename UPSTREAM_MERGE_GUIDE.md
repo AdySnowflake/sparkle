@@ -1,15 +1,14 @@
-# 上游发布版本合并与 CI 构建指南
+# 上游发布版本合并指南
 
-本文档用于把上游仓库的某个**已发布版本**合并到本仓库的 `dev` 分支，并通过本仓库的 GitHub Actions 构建。
+本文档用于把上游仓库的某个**已发布版本**合并到本仓库的 `dev` 分支。
 
 ## 核心原则
 
-- 只合并上游发布版本对应的固定数字 tag，例如 `1.26.7`。
+- 只合并上游发布版本对应的固定数字 tag。
 - 不直接合并 `upstream/master`，否则可能带入尚未发布的提交。
 - 不使用 `rolling`，因为它可能随上游滚动更新。
-- `git fetch` 只下载对象，不会修改 `dev`，也不会触发 CI。
+- `git fetch` 只下载对象，不会修改 `dev`。
 - 普通 `git merge` 在没有冲突时会自动提交。使用 `--no-commit --no-ff` 可以先检查结果，再决定是否提交。
-- CI 只会看到已经推送到 GitHub 的提交；本地 fetch 或未提交的 merge 不会触发 CI。
 
 ## 当前远程配置
 
@@ -41,7 +40,11 @@ git config remote.pushDefault origin
 
 ## 每次发布后的标准操作
 
-下面以 `1.26.8` 为例。操作时将它替换为上游实际发布的版本号。
+先设置本次要合并的上游版本号，使用固定数字 tag，不要使用 `rolling`：
+
+```bash
+VERSION="<上游版本号>"
+```
 
 ### 1. 确认上游发布 tag
 
@@ -56,7 +59,7 @@ git ls-remote --tags --refs upstream
 确认指定 tag 存在：
 
 ```bash
-git ls-remote --exit-code --tags upstream refs/tags/1.26.8
+git ls-remote --exit-code --tags upstream "refs/tags/$VERSION"
 ```
 
 ### 2. 确保本地 `dev` 可安全操作
@@ -81,8 +84,8 @@ git pull --ff-only origin dev
 ### 3. 只获取目标发布 tag
 
 ```bash
-git fetch --no-tags upstream tag 1.26.8
-git show --no-patch --decorate 1.26.8
+git fetch --no-tags upstream tag "$VERSION"
+git show --no-patch --decorate "$VERSION"
 ```
 
 这不会获取或合并 `upstream/master`，也不会修改当前工作区。
@@ -90,7 +93,7 @@ git show --no-patch --decorate 1.26.8
 ### 4. 合并，但停在 commit 前
 
 ```bash
-git merge --no-commit --no-ff 1.26.8
+git merge --no-commit --no-ff "$VERSION"
 ```
 
 如果没有冲突，Git 会显示类似：
@@ -138,9 +141,10 @@ git add <已解决的文件>
 ```bash
 git diff --name-only --diff-filter=U
 git diff --check
+git diff --cached --check
 ```
 
-第一条命令应无输出，第二条命令不应报告冲突标记或空白错误。
+第一条命令应无输出，后两条命令不应报告冲突标记或空白错误。
 
 ## 合并时检查 CI 配置
 
@@ -150,23 +154,29 @@ git diff --check
 git diff --cached -- .github/workflows
 ```
 
-有两种处理方式：
+发现上游修改或新增 workflow 文件时，应执行以下流程：
 
-1. 保留上游 workflow，推送后在 GitHub Actions 页面手动禁用不需要的 workflow。
-2. 完全保留合并前的本地 workflow，不接受本次上游 workflow 变化：
+1. 保留并暂存上游对 `.github/workflows` 的修改和新增文件。
+2. 明确通知用户本次合并改变了哪些 workflow 文件，以及这些变化可能带来的影响。
+3. 检查本仓库自有的 `.github/workflows/build-sparkle.yml`，结合上游 workflow 的变化，协助用户更新本地构建 workflow，使其继续符合本仓库的构建需求。
+4. 将确认后的 `.github/workflows/build-sparkle.yml` 修改加入暂存区：
 
 ```bash
-git restore --source=HEAD --staged --worktree .github/workflows
+git add .github/workflows/build-sparkle.yml
 ```
 
-第二条命令会丢弃本次 merge 带来的所有 workflow 修改和新增文件，执行前应先检查 diff，确认这是预期行为。
+5. 在用户确认 workflow 调整完成前，不创建 merge commit。
+
+不要使用 `git restore --source=HEAD --staged --worktree .github/workflows` 覆盖上游 workflow 变化。
 
 ## 完成 merge commit
+
+只有在用户确认上游 workflow 变化及 `.github/workflows/build-sparkle.yml` 调整完成后，才可以继续提交。
 
 检查无误后提交：
 
 ```bash
-git commit -m "merge: upstream release 1.26.8"
+git commit -m "merge: upstream release $VERSION"
 ```
 
 确认生成的是 merge commit，并查看它的两个父提交：
@@ -182,29 +192,6 @@ git push origin dev
 ```
 
 推送分支不会自动推送刚刚获取的上游 tag。不要使用 `git push --tags`，避免把上游 tag 批量推到自己的仓库。
-
-## 触发云端构建
-
-当前自定义 workflow 文件为 `.github/workflows/build-sparkle.yml`，支持以下方式：
-
-- 在 GitHub Actions 页面手动运行 `Build Sparkle`，并选择 `dev`。
-- 推送名称以 `v` 开头、且指向本次 `dev` merge commit 的构建 tag。
-
-如果使用构建 tag，先确认当前 `HEAD` 就是刚刚推送的 `dev`：
-
-```bash
-git status
-git log -1 --oneline --decorate
-```
-
-然后创建并推送自己的构建 tag，例如：
-
-```bash
-git tag v1.26.8-build.1
-git push origin v1.26.8-build.1
-```
-
-上游的 `1.26.8` 和自己的 `v1.26.8-build.1` 是两个不同的 tag：前者标记上游发布点，后者标记包含本地修改的实际构建点。
 
 ## 失败后的恢复
 
@@ -231,8 +218,9 @@ git revert -m 1 <merge-commit-sha>
 [ ] git merge --no-commit --no-ff <版本>
 [ ] 解决冲突，或 git merge --abort
 [ ] 检查源码和 .github/workflows 的 staged diff
+[ ] 如 workflow 有变化，通知用户并说明影响
+[ ] 检查并协助修改 .github/workflows/build-sparkle.yml
+[ ] 等待用户确认 workflow 调整完成
 [ ] 创建 merge commit
 [ ] git push origin dev
-[ ] 手动运行 Build Sparkle，或推送自己的 v* 构建 tag
-[ ] 检查 GitHub Actions 构建结果
 ```

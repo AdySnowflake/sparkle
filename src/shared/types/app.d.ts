@@ -39,6 +39,7 @@ interface AppConfig {
   core: 'mihomo' | 'mihomo-alpha' | 'system'
   systemCorePath?: string
   corePermissionMode?: 'elevated' | 'service'
+  serviceRunMode?: 'auto' | 'sandbox' | 'direct'
   serviceAuthKey?: string
   disableLoopbackDetector: boolean
   disableEmbedCA: boolean
@@ -98,6 +99,7 @@ interface AppConfig {
   autoSetDNSMode?: 'none' | 'exec' | 'service'
   originDNS?: string
   useWindowFrame: boolean
+  enableWindowDrag: boolean
   proxyInTray: boolean
   trayProxyDelayLayout?: 'same-line' | 'new-line'
   siderOrder: string[]
