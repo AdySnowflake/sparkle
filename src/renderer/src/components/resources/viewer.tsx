@@ -1,5 +1,5 @@
-import { Button, Modal } from '@heroui-v3/react'
-import { Spinner } from '@heroui/react'
+import { Spinner, Button, Modal } from '@heroui/react'
+
 import React, { useEffect, useState } from 'react'
 import { BaseEditor } from '../base/base-editor-lazy'
 import { TextViewer } from '../base/text-viewer'
@@ -12,6 +12,7 @@ import {
 import { dump, load } from 'js-yaml'
 import ConfirmModal from '../base/base-confirm'
 import { notify } from '@renderer/utils/notification'
+import { systemCoreOnlyBuild } from '../../../../shared/build-flags'
 type Language = 'yaml' | 'javascript' | 'css' | 'json' | 'text'
 const FILE_PERMISSION_ELEVATION_REQUIRED = 'FILE_PERMISSION_ELEVATION_REQUIRED'
 const TEXT_VIEWER_LINE_LIMIT = 20000
@@ -80,6 +81,10 @@ const Viewer: React.FC<Props> = (props) => {
       onClose()
     } catch (e) {
       if (!elevated && typeof e === 'string' && e.includes(FILE_PERMISSION_ELEVATION_REQUIRED)) {
+        if (systemCoreOnlyBuild) {
+          notify('当前文件没有写入权限，系统内核构建不支持提权保存', { variant: 'danger' })
+          return
+        }
         setShowPermissionConfirm(true)
         return
       }
@@ -130,7 +135,7 @@ const Viewer: React.FC<Props> = (props) => {
 
   return (
     <Modal>
-      {showPermissionConfirm && (
+      {!systemCoreOnlyBuild && showPermissionConfirm && (
         <ConfirmModal
           onChange={setShowPermissionConfirm}
           title="保存需要提权"
@@ -166,7 +171,7 @@ const Viewer: React.FC<Props> = (props) => {
             <Modal.Body className="h-full">
               {isLoading ? (
                 <div className="flex h-full items-center justify-center">
-                  <Spinner size="lg" />
+                  <Spinner size="lg" color="accent" />
                 </div>
               ) : useTextViewer ? (
                 <TextViewer value={currData} />
@@ -189,7 +194,7 @@ const Viewer: React.FC<Props> = (props) => {
                 </Button>
               </Modal.Footer>
             )}
-            {type !== 'File' && <Modal.CloseTrigger className="app-nodrag" />}
+            <Modal.CloseTrigger className="app-nodrag" />
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
