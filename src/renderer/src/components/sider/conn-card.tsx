@@ -1,7 +1,7 @@
-import { Button, Tooltip, Card } from '@heroui/react'
+import { Button, Card } from '@heroui/react'
 
 import { FaCircleArrowDown, FaCircleArrowUp } from 'react-icons/fa6'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { calcTraffic } from '@renderer/utils/calc'
 import React, { useEffect, useState, useRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
@@ -15,6 +15,7 @@ import templateTrayIcon from '../../../../../resources/iconTemplate.png'
 import sysProxyTrayIcon from '../../../../../resources/icon-sys.png'
 import tunTrayIcon from '../../../../../resources/icon-tun.png'
 import TrafficChart from './traffic-chart'
+import SiderItem from './sider-item'
 
 let currentUpload: number | undefined = undefined
 let currentDownload: number | undefined = undefined
@@ -33,10 +34,11 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 
 interface Props {
   iconOnly?: boolean
+  expanded?: boolean
 }
 
 const ConnCard: React.FC<Props> = (props) => {
-  const { iconOnly } = props
+  const { iconOnly, expanded } = props
   const { appConfig } = useAppConfig()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const {
@@ -58,7 +60,6 @@ const ConnCard: React.FC<Props> = (props) => {
   trayIconStateKeyRef.current = trayIconStateKey
 
   const location = useLocation()
-  const navigate = useNavigate()
   const match = location.pathname.includes('/connections')
 
   const [upload, setUpload] = useState(0)
@@ -162,22 +163,13 @@ const ConnCard: React.FC<Props> = (props) => {
 
   if (iconOnly) {
     return (
-      <div className={`${connectionCardStatus} flex justify-center`}>
-        <Tooltip delay={0}>
-          <Button
-            size="sm"
-            isIconOnly
-            onPress={() => {
-              navigate('/connections')
-            }}
-            variant={match ? 'primary' : 'ghost'}
-            data-color={match ? 'primary' : 'default'}
-          >
-            <IoLink className="text-[20px]" />
-          </Button>
-          <Tooltip.Content placement="right">{'连接'}</Tooltip.Content>
-        </Tooltip>
-      </div>
+      <SiderItem
+        className={connectionCardStatus}
+        title="连接"
+        route="/connections"
+        icon={<IoLink className="text-[20px]" />}
+        expanded={expanded}
+      />
     )
   }
 
@@ -281,7 +273,7 @@ const ConnCard: React.FC<Props> = (props) => {
 }
 
 export default React.memo(ConnCard, (prevProps, nextProps) => {
-  return prevProps.iconOnly === nextProps.iconOnly
+  return prevProps.iconOnly === nextProps.iconOnly && prevProps.expanded === nextProps.expanded
 })
 
 const drawTrayTrafficIcon = async (

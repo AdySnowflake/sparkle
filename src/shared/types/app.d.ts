@@ -33,6 +33,7 @@ interface IHost {
 }
 
 interface AppConfig {
+  webhook?: WebhookConfig
   updateChannel: AppUpdateChannel
   notificationMode?: AppNotificationMode
   showUpdateButtonAfterNotification?: boolean
@@ -78,6 +79,7 @@ interface AppConfig {
   substoreCardStatus?: CardStatus
   sysproxyCardStatus?: CardStatus
   tunCardStatus?: CardStatus
+  gatewayCardStatus?: CardStatus
   githubToken?: string
   gistSyncEnabled?: boolean
   gistEncrypted?: boolean

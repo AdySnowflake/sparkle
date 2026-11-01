@@ -12,6 +12,7 @@ import { quitWithoutCore, restartCore } from '../core/manager'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 import { showNotification } from '../utils/notification'
 import { updateTrayIcon } from './tray'
+import { runWebhookOperation } from './webhook'
 
 export async function registerShortcut(
   oldShortcut: string,
@@ -24,19 +25,29 @@ export async function registerShortcut(
   if (newShortcut === '') {
     return true
   }
+  const register = (callback: () => void | Promise<void>): boolean =>
+    globalShortcut.register(newShortcut, () => {
+      const category =
+        action === 'quitWithoutCoreShortcut'
+          ? 'lifecycle'
+          : /SysProxy|Tun|Mode/.test(action)
+            ? 'network'
+            : 'application'
+      void runWebhookOperation(category, action, callback, {}, 'shortcut').catch(() => {})
+    })
   switch (action) {
     case 'showWindowShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         await triggerMainWindow()
       })
     }
     case 'showFloatingWindowShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         await triggerFloatingWindow()
       })
     }
     case 'triggerSysProxyShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         const {
           sysProxy: { enable },
           onlyActiveDevice = false
@@ -49,8 +60,6 @@ export async function registerShortcut(
           })
           mainWindow?.webContents.send('appConfigUpdated')
           floatingWindow?.webContents.send('appConfigUpdated')
-        } catch {
-          // ignore
         } finally {
           await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
@@ -58,7 +67,7 @@ export async function registerShortcut(
       })
     }
     case 'triggerTunShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         const { tun } = await getControledMihomoConfig()
         const enable = tun?.enable ?? false
         try {
@@ -73,8 +82,6 @@ export async function registerShortcut(
           })
           mainWindow?.webContents.send('controledMihomoConfigUpdated')
           floatingWindow?.webContents.send('appConfigUpdated')
-        } catch {
-          // ignore
         } finally {
           await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
@@ -82,7 +89,7 @@ export async function registerShortcut(
       })
     }
     case 'ruleModeShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         await patchControledMihomoConfig({ mode: 'rule' })
         await patchMihomoConfig({ mode: 'rule' })
         void showNotification({
@@ -93,7 +100,7 @@ export async function registerShortcut(
       })
     }
     case 'globalModeShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         await patchControledMihomoConfig({ mode: 'global' })
         await patchMihomoConfig({ mode: 'global' })
         void showNotification({
@@ -104,7 +111,7 @@ export async function registerShortcut(
       })
     }
     case 'directModeShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         await patchControledMihomoConfig({ mode: 'direct' })
         await patchMihomoConfig({ mode: 'direct' })
         void showNotification({
@@ -115,13 +122,13 @@ export async function registerShortcut(
       })
     }
     case 'quitWithoutCoreShortcut': {
-      return globalShortcut.register(newShortcut, async () => {
+      return register(async () => {
         setNotQuitDialog()
         await quitWithoutCore()
       })
     }
     case 'restartAppShortcut': {
-      return globalShortcut.register(newShortcut, () => {
+      return register(() => {
         setNotQuitDialog()
         app.relaunch()
         app.quit()

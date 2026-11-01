@@ -21,6 +21,7 @@ import {
   patchMihomoConfig
 } from '../core/mihomoApi'
 import { mainWindow, setNotQuitDialog, showMainWindow, triggerMainWindow } from '..'
+import { runWebhookOperation } from './webhook'
 import {
   app,
   BrowserWindow,
@@ -272,12 +273,8 @@ export const buildContextMenu = async (): Promise<Menu> => {
               label: '重新测试',
               type: 'normal',
               click: async (): Promise<void> => {
-                try {
-                  await mihomoGroupDelay(group.name, group.testUrl)
-                  ipcMain.emit('updateTrayMenu')
-                } catch (e) {
-                  // ignore
-                }
+                await mihomoGroupDelay(group.name, group.testUrl)
+                ipcMain.emit('updateTrayMenu')
               }
             },
             { type: 'separator' },
@@ -355,8 +352,6 @@ export const buildContextMenu = async (): Promise<Menu> => {
           await patchAppConfig({ sysProxy: { enable } })
           mainWindow?.webContents.send('appConfigUpdated')
           floatingWindow?.webContents.send('appConfigUpdated')
-        } catch (e) {
-          // ignore
         } finally {
           await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
@@ -379,8 +374,6 @@ export const buildContextMenu = async (): Promise<Menu> => {
           mainWindow?.webContents.send('controledMihomoConfigUpdated')
           floatingWindow?.webContents.send('controledMihomoConfigUpdated')
           await restartCore()
-        } catch {
-          // ignore
         } finally {
           await updateTrayIcon()
           ipcMain.emit('updateTrayMenu')
@@ -538,7 +531,48 @@ export const buildContextMenu = async (): Promise<Menu> => {
       }
     }
   ] as Electron.MenuItemConstructorOptions[]
-  return Menu.buildFromTemplate(contextMenu)
+  return Menu.buildFromTemplate(trackTrayOperations(contextMenu))
+}
+
+function trackTrayOperations(
+  items: Electron.MenuItemConstructorOptions[],
+  parentCategory?: WebhookCategory
+): Electron.MenuItemConstructorOptions[] {
+  return items.map((item) => {
+    const label = item.label ?? item.id ?? ''
+    const click = item.click
+    const category =
+      parentCategory ??
+      (label === '订阅配置'
+        ? 'profiles'
+        : label === '打开目录' || label === '复制环境变量'
+          ? 'tools'
+          : item.id === 'quitWithoutCore'
+            ? 'lifecycle'
+            : item.type === 'radio' ||
+                /系统代理|虚拟网卡|出站模式/.test(label) ||
+                (Array.isArray(item.submenu) &&
+                  item.submenu.some((child) => child.type === 'radio'))
+              ? 'network'
+              : 'application')
+    return {
+      ...item,
+      submenu: Array.isArray(item.submenu)
+        ? trackTrayOperations(item.submenu, category)
+        : item.submenu,
+      click: click
+        ? (menuItem, window, event) => {
+            void runWebhookOperation(
+              category,
+              `tray.${item.id || label}`,
+              () => click(menuItem, window, event),
+              { selected: menuItem.checked },
+              'tray'
+            ).catch(() => {})
+          }
+        : undefined
+    }
+  })
 }
 
 export async function createTray(): Promise<void> {
